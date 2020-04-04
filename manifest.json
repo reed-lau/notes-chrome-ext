@@ -1,13 +1,13 @@
 {
-    "name": "name-value",
+    "name": "instant-note",
     "version": "0.1",
-    "description": "description-value",
+    "description": "instant note",
     "permissions": ["activeTab", "declarativeContent", "storage"],
     "background": {
         "scripts": ["background.js"],
         "persistent": false
     },
-    "page_action": {
+    "browser_action": {
         "default_popup": "popup.html",
         "default_icon": {
             "16" : "images/get_started16.png",
@@ -21,6 +21,9 @@
         "32" : "images/get_started32.png",
         "48" : "images/get_started48.png",
         "128" : "images/get_started128.png"
+    },
+    "chrome_url_overrides": {
+        "newtab": "newtab.html"
     },
     "manifest_version": 2
 }
