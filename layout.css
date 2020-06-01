@@ -1,6 +1,5 @@
 #nav {
     line-height:30px;
-    // background-color:#eeeeee;
     height:300px;
     width:20%;
     float:left;
@@ -10,4 +9,27 @@
     width: 60%;
     float:left;
     padding:10px;	 	 
+}
+#container {
+  position: absolute;
+  left: 20px;
+  top: 80%;
+  width: 200px;
+  text-align: center;
+  font-size: 16px;
+}
+#selector {
+  max-height: 100px;
+  overflow-y: auto;
+  border: 1px solid ;
+  background-color: #f4f5f7;
+  border-radius: 4px;
+}
+.selector__item {
+  margin: 10px 0;
+  color: blue;
+  cursor: pointer;
+}
+.selector__item.active {
+  color: green;
 }
