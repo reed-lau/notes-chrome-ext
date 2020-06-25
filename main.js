@@ -7,6 +7,54 @@ let storeChange = 0
 let isInit = false
 const cacheMaxSize = 3 //后悔药
 
+
+const setInputValue = (val) => {
+  let input = document.getElementById('current')
+  input.value = val
+}
+const inputEvent = () => {
+  const getItems = (activeItems, value) => {
+    let newList = {}
+    for (let id in activeItems) {
+      if (String(activeItems[id].name).indexOf(value) >= 0) {
+        newList[id] = activeItems[id]
+      } 
+    }
+    return newList
+  }
+  let input = document.getElementById('current')
+  input.addEventListener('blur', () => {
+    setTimeout(() => {
+      setInputValue(activeItems[activeId].name)
+      createListDom({}, false)
+    }, 100)
+  })
+  input.addEventListener('input', (e) => {
+    let value = e.target.value.trim()
+    let newList = getItems(activeItems, value)
+    if (Object.keys(newList).length <= 0) {
+      input.classList.add('current--error')
+      createListDom(newList, false)
+      return
+    }
+    createListDom(newList, true)
+  })
+  input.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+      let value = e.target.value.trim()
+      let newList = getItems(activeItems, value)
+      let ids = Object.keys(newList)
+      if (ids[0]) {
+        if (ids[0] === activeId) return
+        setInputValue(activeItems[ids[0]].name)
+        createMD(ids[0])
+      } else {
+        newCache(e.target.value.trim())
+      }
+    }
+  })
+}
+
 const initDom = () => {
   dom = {
     layout: document.getElementById('layout'),
@@ -36,9 +84,12 @@ const createMD = (markdown) => {
       let content = document.getElementById('content')
       if (!content) return
       activeChange += 1
-      console.log(activeChange, 'active change')
       chrome.storage.sync.set({[activeId]: content.value}, function() {
         console.log('store', activeId)
+        chrome.runtime.sendMessage({
+          type: 'update',
+          id: activeId
+        })
       })
     },
     // markdown: markdown,     // dynamic set Markdown text
@@ -65,19 +116,22 @@ const renderNewMarkDom = (id) => {
 function loadHandler() {
     initDom()
     initListener()
+    inputEvent()
     chrome.storage.sync.get('nodeList', (data) => {
       createList(data.nodeList)
+      setInputValue(data.nodeList[activeId] && data.nodeList[activeId].name || '')
       renderNewMarkDom(activeId)
     })
 }
 
-function clickListener(e) {
+function clickListener (e) {
   let target = e.target
-  if (target.nodeName.toLocaleLowerCase() === 'div') {
-    let id = target.id
+  let targetType = target.nodeName.toLocaleLowerCase()
+  if (targetType === 'div') {
+    let id = target.id || target.parentNode.id
     if (activeId === id) return
-    activeItems[activeId] = false
-    activeItems[id] = true
+    activeItems[activeId].active = false
+    activeItems[id].active = true
     activeId = id
     let children = ([].slice.call(document.getElementById('selector').children))
     children.forEach(child => {
@@ -87,39 +141,72 @@ function clickListener(e) {
     chrome.storage.sync.set({'nodeList': activeItems}, function() {
     })
     renderNewMarkDom(activeId)
+  } else if (targetType === 'img') {
+    let id = target.id || target.parentNode.id
+    console.log('hhhhh', id)
+    deleteHandler(id)
   }
 }
 
-function createList (arr = {}) {
-  const len = Object.keys(arr) // {id: isActive | boolean}
-  activeItems = arr
-  if (len.length === 0) { // empty
-    activeItems[0] = true // set defalut
-    chrome.storage.sync.set({'nodeList': activeItems}, function() {
-      console.log('store nodelist error', arr)
-    })
+function createListDom (activeItems, isNeedRender) {
+    if (!isNeedRender) {
+    dom.selector.style.visibility = 'hidden'
+    return
+  }
+  while (dom.selector.firstChild) {
+    dom.selector.removeChild(dom.selector.firstChild);
   }
 
+  dom.selector.style.visibility = 'visible'
   const fragment = document.createDocumentFragment()
-  console.log(activeItems)
   Object.keys(activeItems).forEach((i, idx) => {
     const div = document.createElement('div')
-    div.innerText = idx
+    const span = document.createElement('div')
+    const close = document.createElement('img')
+    close.src = './images/close.svg'
+    close.className = 'selector__item-delete'
+    span.className = 'selector__item-span'
+    div.appendChild(span)
+    div.appendChild(close)
+    span.innerText = activeItems[i].name
     div.className = 'selector__item ' 
-    if (activeItems[i]) {
+    if (activeItems[i].active) {
       div.className += activeItems[i] ? ' active' : ''
       activeId = i
     }
-    div.id = i 
+    div.id = i
+    div._id = i
     fragment.appendChild(div)
   })
   dom.selector.appendChild(fragment)
+}
+function createList (arr = {}, isNeedRender = false) {
+  const len = Object.keys(arr) // {id: isActive | boolean}
+  activeItems = arr
+  if (len.length === 0) { // empty
+    activeItems[0] = {
+      active: true,
+      name: 'hello world'
+    }
+    chrome.storage.sync.set({'nodeList': activeItems}, function() {
+      console.log('store nodelist error', arr)
+    })
+  } else {
+    activeId = Object.keys(activeItems).find(id => {
+      return activeItems[id].active
+    }) || Object.keys(activeItems)[0] || '0'
+  }
+  createListDom(activeItems ,isNeedRender)
 } 
 
-function deleteHandler () {
+function deleteHandler (id) {
   let keys = Object.keys(activeItems)
   if (keys.length === 1) return 
 
+  chrome.runtime.sendMessage({
+    type: 'delete',
+    id: id
+  })
   chrome.storage.sync.get('lastCache', function(data) {
     let res = data.lastCache
     let needDelete = undefined
@@ -128,30 +215,31 @@ function deleteHandler () {
     } else if (res.length >= cacheMaxSize) {
       needDelete = res.shift()
     }
-    res.push(activeId)
+    res.push({
+      id: id,
+      name: activeItems[id].name
+    })
     chrome.storage.sync.set({'lastCache': res}, function() {
     })
 
     // set new active id
-    let deleteChild = document.getElementById(activeId)
+    let deleteChild = document.getElementById(id)
     dom.selector.removeChild(deleteChild)
 
-    delete activeItems[activeId]
-    activeId = Object.keys(activeItems).pop()
-    console.log('ac', activeId)
-    activeItems[activeId] = true
+    delete activeItems[id]
+    if (activeId === id) {
+      activeId = Object.keys(activeItems).pop()
+      activeItems[activeId].active = true
+      let activeChild = document.getElementById(activeId)
+      activeChild.classList.add('active')
+      chrome.storage.sync.set({'nodeList': activeItems}, function() {
+      })
 
-    let activeChild = document.getElementById(activeId)
-    activeChild.classList.add('active')
-
-    chrome.storage.sync.set({'nodeList': activeItems}, function() {
-    })
-    console.log(needDelete, typeof needDelete)
-    needDelete && chrome.storage.sync.remove(String(needDelete), function() {
-    })
-    chrome.storage.sync.get(activeId, function(data) {
-      createMD(data[activeId])
-    })
+      needDelete && chrome.storage.sync.remove(String(needDelete.id), function() {})
+      chrome.storage.sync.get(activeId, function(data) {
+        createMD(data[activeId])
+      })
+    }
   })
 }
 
@@ -162,10 +250,14 @@ function revertHandler () {
       return
     }
     let _active = res.pop()
-    activeItems[_active] = true
-    activeItems[activeId] = false
+    activeItems[_active.id] = {
+      active: true,
+      name: _active.name
+    }
+    activeItems[activeId].active = false
     activeId = _active
     chrome.storage.sync.get(activeId, function(data) {
+      setInputValue(_active.name)
       createMD(data[activeId])
     })
     let children = [].slice.call(document.getElementById('selector').children)
@@ -179,15 +271,34 @@ function revertHandler () {
 
 function initListener () {
   dom.selector.addEventListener('click', clickListener)
-  dom.newCache.addEventListener('click', newCache)
-  dom.delete.addEventListener('click', deleteHandler)
+  // dom.newCache.addEventListener('click', newCache)
+  // dom.delete.addEventListener('click', deleteHandler)
   dom.revert.addEventListener('click', revertHandler)
-  chrome.storage.onChanged.addListener((data, area) => {
-    console.log(activeChange, storeChange)
-    if (area === 'sync' && (activeId in data) && activeChange === storeChange) {
-      createMD(data[activeId].newValue)
-      storeChange += 1
+  chrome.runtime.onMessage.addListener((request, sender, sendRes) => {
+    const _update = (id) => {
+      if (id === activeId) {
+        location.reload()
+      } 
     }
+    const _delete = (id) => {
+      if (id === activeId) {
+        location.reload()
+      } else {
+        // 移除dom即可
+        let newDom = document.getElementById(id)
+        newDom && dom.selector.removeChild(newDom)
+      }
+    }
+    const _add = (id) => {
+      dom.selector.appendChild(addNewDom(id, 'selector__item active', dom.selector.children.length))
+    }
+    const dealFunctions = {
+      update: _update,
+      delete: _delete,
+      add: _add
+    }
+    let type = request.type
+    dealFunctions[type](request.id)  
   })
 }
 
@@ -199,12 +310,19 @@ function addNewDom (id, className, content) {
   return div
 }
 
-function newCache() {
-  activeItems[activeId] = false 
+function newCache (name) {
+  activeItems[activeId].active = false 
   let _newId = Math.max(...Object.keys(activeItems).map(i => Number(i))) + 1
-  activeItems[_newId] = true
   activeId = _newId
+  activeItems[activeId] = {
+    active: true,
+    name: name
+  }
   chrome.storage.sync.set({'nodeList': activeItems}, function() {
+    chrome.runtime.sendMessage({
+      type: 'add',
+      id: activeId
+    })
   })
   createMD('')
   let children = [].slice.call(document.getElementById('selector').children)

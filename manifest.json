@@ -2,7 +2,7 @@
     "name": "instant-note",
     "version": "0.1",
     "description": "instant note",
-    "permissions": ["activeTab", "declarativeContent", "storage"],
+    "permissions": ["activeTab", "declarativeContent", "storage", "tabs"],
     "background": {
         "scripts": ["background.js"],
         "persistent": false
