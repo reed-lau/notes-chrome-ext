@@ -60,6 +60,7 @@
             border-color: #fb5549;
           }
           .selector__item {
+            position: relative;
             padding:0 20px;
           }
           .selector__item:hover {
@@ -69,7 +70,9 @@
             display: inline-block;
           }
           .selector__item-delete {
-            float: right;
+            position: absolute;
+            right: 10px;
+            z-index: 5;
             background-color: tomato;
           }
         </style>
@@ -95,7 +98,7 @@
           </div>
           <div id="selector">
           </div>
-          <input class="input" id="current" placeholder="name need" />
+          <input class="input" id="input" placeholder="name need" />
           <button class="action action--revert" id="revert">Revert</button>
         </div>
     </body>

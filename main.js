@@ -2,77 +2,29 @@ let editor = undefined
 let activeId = '0'
 let activeItems = {}
 let dom = {}
-let activeChange = 0
-let storeChange = 0
-let isInit = false
 const cacheMaxSize = 3 //后悔药
 
 
-const setInputValue = (val) => {
-  let input = document.getElementById('current')
-  input.value = val
-}
-const inputEvent = () => {
-  const getItems = (activeItems, value) => {
-    let newList = {}
-    for (let id in activeItems) {
-      if (String(activeItems[id].name).indexOf(value) >= 0) {
-        newList[id] = activeItems[id]
-      } 
-    }
-    return newList
-  }
-  let input = document.getElementById('current')
-  input.addEventListener('blur', () => {
-    setTimeout(() => {
-      setInputValue(activeItems[activeId].name)
-      createListDom({}, false)
-    }, 100)
-  })
-  input.addEventListener('input', (e) => {
-    let value = e.target.value.trim()
-    let newList = getItems(activeItems, value)
-    if (Object.keys(newList).length <= 0) {
-      input.classList.add('current--error')
-      createListDom(newList, false)
-      return
-    }
-    createListDom(newList, true)
-  })
-  input.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') {
-      let value = e.target.value.trim()
-      let newList = getItems(activeItems, value)
-      let ids = Object.keys(newList)
-      if (ids[0]) {
-        if (ids[0] === activeId) return
-        setInputValue(activeItems[ids[0]].name)
-        createMD(ids[0])
-      } else {
-        newCache(e.target.value.trim())
-      }
-    }
-  })
-}
-
+const nopFunction = () => {}
 const initDom = () => {
   dom = {
     layout: document.getElementById('layout'),
     selector: document.getElementById('selector'),
-    newCache: document.getElementById('newCache'),
-    delete: document.getElementById('delete'),
+    input: document.getElementById('input'),
     revert: document.getElementById('revert'),
   }
 }
-const createMD = (markdown) => {
+
+const setInputValue = (val) => {
+  dom.input.value = val
+}
+
+const createMarkdown = markdown => {
   if (editor) { // only one editormd instance
     editor.editor.remove()
   }
   createEditorDom()
   document.getElementById('content').value = markdown
-  isInit = false
-  activeChange = 0
-  storeChange = 0
   editor = editormd('editor', {
     width: "100%",
     height: 720,
@@ -83,7 +35,6 @@ const createMD = (markdown) => {
     onchange : function () {
       let content = document.getElementById('content')
       if (!content) return
-      activeChange += 1
       chrome.storage.sync.set({[activeId]: content.value}, function() {
         console.log('store', activeId)
         chrome.runtime.sendMessage({
@@ -95,8 +46,8 @@ const createMD = (markdown) => {
     // markdown: markdown,     // dynamic set Markdown text
     path : "editor.md/lib/"  // Autoload modules mode, codemirror, marked... dependents libs path
   })
-  console.log('init', activeChange, storeChange)
 }
+
 const createEditorDom = () => {
   let div = document.createElement('div')
   let textarea = document.createElement('textarea')
@@ -107,24 +58,24 @@ const createEditorDom = () => {
 
   dom.layout.appendChild(div)
 }
-const renderNewMarkDom = (id) => {
+
+const recreateMarkdown = id => {
   chrome.storage.sync.get(id, data => {
-    createMD(data[id])
+    createMarkdown(data[id])
   })
 }
 
-function loadHandler() {
+function pageLoadHandler() {
     initDom()
     initListener()
-    inputEvent()
     chrome.storage.sync.get('nodeList', (data) => {
       createList(data.nodeList)
       setInputValue(data.nodeList[activeId] && data.nodeList[activeId].name || '')
-      renderNewMarkDom(activeId)
+      recreateMarkdown(activeId)
     })
 }
 
-function clickListener (e) {
+function selectorListener (e) {
   let target = e.target
   let targetType = target.nodeName.toLocaleLowerCase()
   if (targetType === 'div') {
@@ -133,28 +84,23 @@ function clickListener (e) {
     activeItems[activeId].active = false
     activeItems[id].active = true
     activeId = id
-    let children = ([].slice.call(document.getElementById('selector').children))
-    children.forEach(child => {
-      let method = child.id === activeId ? 'add' : 'remove'
-      child.classList[method]('active')
-    })
-    chrome.storage.sync.set({'nodeList': activeItems}, function() {
-    })
-    renderNewMarkDom(activeId)
+    setInputValue(activeItems[id].name)
+    chrome.storage.sync.set({'nodeList': activeItems}, nopFunction)
+    recreateMarkdown(activeId)
   } else if (targetType === 'img') {
     let id = target.id || target.parentNode.id
-    console.log('hhhhh', id)
-    deleteHandler(id)
+    deleteListener(id)
   }
 }
 
 function createListDom (activeItems, isNeedRender) {
-    if (!isNeedRender) {
+  if (!isNeedRender) {
     dom.selector.style.visibility = 'hidden'
     return
   }
+
   while (dom.selector.firstChild) {
-    dom.selector.removeChild(dom.selector.firstChild);
+    dom.selector.removeChild(dom.selector.firstChild)
   }
 
   dom.selector.style.visibility = 'visible'
@@ -175,7 +121,6 @@ function createListDom (activeItems, isNeedRender) {
       activeId = i
     }
     div.id = i
-    div._id = i
     fragment.appendChild(div)
   })
   dom.selector.appendChild(fragment)
@@ -199,7 +144,7 @@ function createList (arr = {}, isNeedRender = false) {
   createListDom(activeItems ,isNeedRender)
 } 
 
-function deleteHandler (id) {
+function deleteListener (id) {
   let keys = Object.keys(activeItems)
   if (keys.length === 1) return 
 
@@ -219,8 +164,7 @@ function deleteHandler (id) {
       id: id,
       name: activeItems[id].name
     })
-    chrome.storage.sync.set({'lastCache': res}, function() {
-    })
+    chrome.storage.sync.set({'lastCache': res}, nopFunction)
 
     // set new active id
     let deleteChild = document.getElementById(id)
@@ -232,18 +176,17 @@ function deleteHandler (id) {
       activeItems[activeId].active = true
       let activeChild = document.getElementById(activeId)
       activeChild.classList.add('active')
-      chrome.storage.sync.set({'nodeList': activeItems}, function() {
-      })
+      chrome.storage.sync.set({'nodeList': activeItems}, nopFunction)
 
       needDelete && chrome.storage.sync.remove(String(needDelete.id), function() {})
       chrome.storage.sync.get(activeId, function(data) {
-        createMD(data[activeId])
+        createMarkdown(data[activeId])
       })
     }
   })
 }
 
-function revertHandler () {
+function revertListener () {
   chrome.storage.sync.get('lastCache', function(data) {
     let res = data.lastCache
     if (!res || res.length < 1) {
@@ -258,56 +201,83 @@ function revertHandler () {
     activeId = _active
     chrome.storage.sync.get(activeId, function(data) {
       setInputValue(_active.name)
-      createMD(data[activeId])
+      createMarkdown(data[activeId])
     })
-    let children = [].slice.call(document.getElementById('selector').children)
-    children.forEach(i => {
-      i.classList.remove('active')
-    })
-    dom.selector.appendChild(addNewDom(activeId, 'selector__item active', children.length))
     chrome.storage.sync.set({'nodeList': activeItems}, function() { })
   })
 }
-
-function initListener () {
-  dom.selector.addEventListener('click', clickListener)
-  // dom.newCache.addEventListener('click', newCache)
-  // dom.delete.addEventListener('click', deleteHandler)
-  dom.revert.addEventListener('click', revertHandler)
-  chrome.runtime.onMessage.addListener((request, sender, sendRes) => {
-    const _update = (id) => {
-      if (id === activeId) {
-        location.reload()
-      } 
-    }
-    const _delete = (id) => {
-      if (id === activeId) {
-        location.reload()
-      } else {
-        // 移除dom即可
-        let newDom = document.getElementById(id)
-        newDom && dom.selector.removeChild(newDom)
-      }
-    }
-    const _add = (id) => {
-      dom.selector.appendChild(addNewDom(id, 'selector__item active', dom.selector.children.length))
-    }
-    const dealFunctions = {
-      update: _update,
-      delete: _delete,
-      add: _add
-    }
-    let type = request.type
-    dealFunctions[type](request.id)  
-  })
+const _getItems = (activeItems, value) => {
+  let newList = {}
+  for (let id in activeItems) {
+    if (String(activeItems[id].name).indexOf(value) >= 0) {
+      newList[id] = activeItems[id]
+    } 
+  }
+  return newList
+}
+function inputBlurListener () {
+  setTimeout(() => {
+    setInputValue(activeItems[activeId].name)
+    createListDom({}, false)
+  }, 100)
 }
 
-function addNewDom (id, className, content) {
-  let div = document.createElement('div')
-  div.className = className
-  div.id = id
-  div.innerText = content
-  return div
+function inputInputListener (e) {
+  let value = e.target.value.trim()
+  let newList = _getItems(activeItems, value)
+  let isNeedRender = Object.keys(newList).length > 0
+  createListDom(newList, isNeedRender)
+}
+function inputEnterListener (e) {
+  if (e.key === 'Enter') {
+    let value = e.target.value.trim()
+    let newList = _getItems(activeItems, value)
+    let ids = Object.keys(newList)
+    let id = ids[0]
+    if (id) {
+      if (id === activeId) return
+      setInputValue(activeItems[id].name)
+      createMarkdown(id)
+    } else {
+      newCache(e.target.value.trim())
+    }
+  }
+}
+function chromeRuntimeListener (request) {
+  const _update = (id) => {
+    if (id === activeId) {
+      location.reload()
+    } 
+  }
+  const _delete = (id) => {
+    if (id === activeId) {
+      location.reload()
+    } else {
+      // 移除dom即可
+      delete activeItems[id]
+    }
+  }
+  const _add = (id, name) => {
+    activeItems[id] = {
+      active: false,
+      name: name
+    }
+  }
+  const dealFunctions = {
+    update: _update,
+    delete: _delete,
+    add: _add
+  }
+  let type = request.type
+  dealFunctions[type](request.id, request.name)  
+}
+function initListener () {
+  dom.input.addEventListener('blur', inputBlurListener)
+  dom.input.addEventListener('input', inputInputListener)
+  dom.input.addEventListener('keypress', inputEnterListener)
+  dom.selector.addEventListener('click', selectorListener)
+  dom.revert.addEventListener('click', revertListener)
+  chrome.runtime.onMessage.addListener(chromeRuntimeListener)
 }
 
 function newCache (name) {
@@ -318,22 +288,18 @@ function newCache (name) {
     active: true,
     name: name
   }
-  chrome.storage.sync.set({'nodeList': activeItems}, function() {
+  chrome.storage.sync.set({'nodeList': activeItems}, () => {
     chrome.runtime.sendMessage({
       type: 'add',
-      id: activeId
+      id: activeId,
+      name: name
     })
   })
-  createMD('')
-  let children = [].slice.call(document.getElementById('selector').children)
-  children.forEach(i => {
-    i.classList.remove('active')
-  })
-  dom.selector.appendChild(addNewDom(activeId, 'selector__item active', children.length))
+  createMarkdown('')
 }
 
 // 加入后悔药功能
 // 加入防抖功能
 // 加入监听功能，来实现多个tab页
 
-window.addEventListener('load', loadHandler);
+window.addEventListener('load', pageLoadHandler);
