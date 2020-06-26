@@ -34,15 +34,6 @@
   color: #67C23A;
 }
 
-button {
-  color: #fff;
-  background-color: #409eff;
-  border: 1px solid #409eff;
-  font-size: 14px;
-  padding: 12px 20px;
-  border-radius: 4px;
-  width: 100%;
-} 
 button:hover {
   cursor: pointer;
 }
@@ -51,17 +42,27 @@ button:hover {
   border-color: #e6a23c;
 }
 .action--revert {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 20px;
+  height: 20px;
+  background-color: #eeeeee;
+  border: 1px solid #d7d8da;
+  border-radius: 50%;
+}
+.action--revert:hover {
+  cursor: pointer;
   background-color: #909399;
-  border-color: #909399;
 }
 .input {
   -webkit-appearance: none;
-  background-color: #fff;
+  background-color: #eeeeee;
   background-image: none;
   border-radius: 4px;
-  border: 1px solid #7690ab;
+  border: 1px solid #d7d8da;
   box-sizing: border-box;
-  color: #606266;
+  color: #909399;
   display: inline-block;
   font-size: inherit;
   height: 40px;
@@ -75,6 +76,7 @@ button:hover {
 .input:focus {
   outline: none;
   border-color: #409eff;
+  background-color: #fff;
 }
 .current-error {
   border-color: #fb5549;

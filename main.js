@@ -3,6 +3,7 @@ let activeId = '0'
 let activeItems = {}
 let dom = {}
 const cacheMaxSize = 4 //后悔药
+let _inputFocus = false
 
 
 const nopFunction = () => {}
@@ -129,7 +130,7 @@ function createList (arr = {}, isNeedRender = false) {
   if (len.length === 0) { // empty
     activeItems[0] = {
       active: true,
-      name: 'hello world'
+      name: 'note'
     }
     chrome.storage.sync.set({'nodeList': activeItems}, nopFunction)
   } else {
@@ -215,14 +216,15 @@ const _getItems = (activeItems, value) => {
   return newList
 }
 function inputBlurListener () {
+  _inputFocus = false
   setTimeout(() => {
     setInputValue(activeItems[activeId].name)
     createListDom({}, false)
   }, 200)
 }
 
-function inputInputListener (e) {
-  let value = e.target.value.trim()
+function inputInputListener (e, val) {
+  let value = e ? e.target.value.trim() : val
   let newList = _getItems(activeItems, value)
   let isNeedRender = Object.keys(newList).length > 0
   createListDom(newList, isNeedRender)
@@ -231,9 +233,20 @@ function inputEnterListener (e) {
   if (e.key === 'Enter') {
     let value = e.target.value.trim()
     let newList = _getItems(activeItems, value)
-    let ids = Object.keys(newList)
-    if (ids.length <= 0) {
+    let flag = Object.keys(newList).find(i => {
+      return value === newList[i].name
+    })
+    if (flag === undefined) {
       newCache(value)
+    } else {
+      let id = flag
+      if (activeId === id) return
+      activeItems[activeId].active = false
+      activeItems[id].active = true
+      activeId = id
+      setInputValue(activeItems[id].name)
+      chrome.storage.sync.set({'nodeList': activeItems}, nopFunction) 
+      recreateMarkdown(activeId)
     }
   }
 }
@@ -270,6 +283,13 @@ function initListener () {
   dom.input.addEventListener('blur', inputBlurListener)
   dom.input.addEventListener('input', inputInputListener)
   dom.input.addEventListener('keypress', inputEnterListener)
+  dom.input.addEventListener('click', () => {
+    if (!_inputFocus) {
+      setInputValue('')
+      inputInputListener(undefined, '')
+    }
+    _inputFocus = true
+  })
   dom.selector.addEventListener('click', selectorListener)
   dom.revert.addEventListener('click', revertListener)
   chrome.runtime.onMessage.addListener(chromeRuntimeListener)
