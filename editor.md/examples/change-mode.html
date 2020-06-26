@@ -292,13 +292,13 @@ public class BlogController extends Controller {
 
             loader = new URLLoader();
             loader.load(new URLRequest(url));
-			loader.addEventListener(Event.OPEN, preloadHandler);
+			loader.addEventListener(Event.OPEN, prepageLoadHandler);
 			loader.addEventListener(IOErrorEvent.IO_ERROR, errorHandler);
 			loader.addEventListener(ProgressEvent.PROGRESS, progressHandler);
             loader.addEventListener(Event.COMPLETE, loadedHandler);
 		}
 
-		private function preloadHandler(event:Event) : void
+		private function prepageLoadHandler(event:Event) : void
         {
 			onpreload = onpreload || new Function;
 			onpreload(event);

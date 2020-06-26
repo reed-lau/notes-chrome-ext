@@ -2,12 +2,12 @@
 <html>
     <head>
         <link rel="stylesheet" href="layout.css" />
+        <title>Note</title>
         <script src="editor.md/languages/en.js"></script>
         <link rel="stylesheet" href="editor.md/css/editormd.min.css" />
         <script src="jquery.min.js"></script>
         <script src="editor.md/editormd.min.js"></script>
         <script src="main.js"></script>
-
     </head>
 
     <body style="background-color:#eeeeee">
@@ -15,12 +15,18 @@
         </div>
 
         <div id="main">
-        <div id="layout">
-        <div id="editor">
-            <!-- Tips: Editor.md can auto append a `<textarea>` tag -->
-            <textarea style="display:none;height=100%" id='content'></textarea>
+          <div id="layout">
+            <div id="editor">
+                <!-- Tips: Editor.md can auto append a `<textarea>` tag -->
+                <textarea style="display:none;height:100%" id='content'></textarea>
+            </div>
+          </div>
         </div>
+
+        <div id="container">
+          <div id="selector"></div>
+          <input class="input" id="input" placeholder="name need" />
         </div>
-        </div>
+        <img class="action action--revert" id="revert" src="./images/revert.svg"/>
     </body>
 </html>
