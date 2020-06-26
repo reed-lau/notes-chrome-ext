@@ -2,7 +2,7 @@ let editor = undefined
 let activeId = '0'
 let activeItems = {}
 let dom = {}
-const cacheMaxSize = 3 //后悔药
+const cacheMaxSize = 4 //后悔药
 
 
 const nopFunction = () => {}
@@ -36,7 +36,6 @@ const createMarkdown = markdown => {
       let content = document.getElementById('content')
       if (!content) return
       chrome.storage.sync.set({[activeId]: content.value}, function() {
-        console.log('store', activeId)
         chrome.runtime.sendMessage({
           type: 'update',
           id: activeId
@@ -78,8 +77,8 @@ function pageLoadHandler() {
 function selectorListener (e) {
   let target = e.target
   let targetType = target.nodeName.toLocaleLowerCase()
+  let id = target.id || target.parentNode.id
   if (targetType === 'div') {
-    let id = target.id || target.parentNode.id
     if (activeId === id) return
     activeItems[activeId].active = false
     activeItems[id].active = true
@@ -88,7 +87,6 @@ function selectorListener (e) {
     chrome.storage.sync.set({'nodeList': activeItems}, nopFunction)
     recreateMarkdown(activeId)
   } else if (targetType === 'img') {
-    let id = target.id || target.parentNode.id
     deleteListener(id)
   }
 }
@@ -133,9 +131,7 @@ function createList (arr = {}, isNeedRender = false) {
       active: true,
       name: 'hello world'
     }
-    chrome.storage.sync.set({'nodeList': activeItems}, function() {
-      console.log('store nodelist error', arr)
-    })
+    chrome.storage.sync.set({'nodeList': activeItems}, nopFunction)
   } else {
     activeId = Object.keys(activeItems).find(id => {
       return activeItems[id].active
@@ -148,40 +144,36 @@ function deleteListener (id) {
   let keys = Object.keys(activeItems)
   if (keys.length === 1) return 
 
-  chrome.runtime.sendMessage({
-    type: 'delete',
-    id: id
-  })
+  
   chrome.storage.sync.get('lastCache', function(data) {
     let res = data.lastCache
     let needDelete = undefined
     if (!res || res.length < 1) {
       res = []
-    } else if (res.length >= cacheMaxSize) {
+    }
+    if (!res.some(item => item.id === id)) {
+      res.push({
+        id: id,
+        name: activeItems[id].name
+      })
+    }
+    if (res.length >= cacheMaxSize) {
       needDelete = res.shift()
     }
-    res.push({
-      id: id,
-      name: activeItems[id].name
-    })
     chrome.storage.sync.set({'lastCache': res}, nopFunction)
 
-    // set new active id
-    let deleteChild = document.getElementById(id)
-    dom.selector.removeChild(deleteChild)
-
     delete activeItems[id]
-    if (activeId === id) {
-      activeId = Object.keys(activeItems).pop()
-      activeItems[activeId].active = true
-      let activeChild = document.getElementById(activeId)
-      activeChild.classList.add('active')
-      chrome.storage.sync.set({'nodeList': activeItems}, nopFunction)
-
-      needDelete && chrome.storage.sync.remove(String(needDelete.id), function() {})
-      chrome.storage.sync.get(activeId, function(data) {
-        createMarkdown(data[activeId])
+    chrome.storage.sync.set({'nodeList': activeItems}, () => {
+      chrome.runtime.sendMessage({
+        type: 'delete',
+        id: id
       })
+    })
+    needDelete && chrome.storage.sync.remove(String(needDelete.id), nopFunction)
+
+    if (activeId === id) {
+      activeId = Object.keys(activeItems)[0]
+      recreateMarkdown(activeId)
     }
   })
 }
@@ -193,17 +185,24 @@ function revertListener () {
       return
     }
     let _active = res.pop()
+    chrome.storage.sync.set({'lastCache': res}, nopFunction)
+
     activeItems[_active.id] = {
       active: true,
       name: _active.name
     }
     activeItems[activeId].active = false
-    activeId = _active
-    chrome.storage.sync.get(activeId, function(data) {
+    activeId = _active.id
+    chrome.runtime.sendMessage({
+      type: 'add',
+      id: activeId,
+      name: _active.name
+    })
+    chrome.storage.sync.set({'nodeList': activeItems}, nopFunction)
+    chrome.storage.sync.get(activeId, (data) => {
       setInputValue(_active.name)
       createMarkdown(data[activeId])
     })
-    chrome.storage.sync.set({'nodeList': activeItems}, function() { })
   })
 }
 const _getItems = (activeItems, value) => {
@@ -219,7 +218,7 @@ function inputBlurListener () {
   setTimeout(() => {
     setInputValue(activeItems[activeId].name)
     createListDom({}, false)
-  }, 100)
+  }, 200)
 }
 
 function inputInputListener (e) {
@@ -233,13 +232,8 @@ function inputEnterListener (e) {
     let value = e.target.value.trim()
     let newList = _getItems(activeItems, value)
     let ids = Object.keys(newList)
-    let id = ids[0]
-    if (id) {
-      if (id === activeId) return
-      setInputValue(activeItems[id].name)
-      createMarkdown(id)
-    } else {
-      newCache(e.target.value.trim())
+    if (ids.length <= 0) {
+      newCache(value)
     }
   }
 }
@@ -269,7 +263,8 @@ function chromeRuntimeListener (request) {
     add: _add
   }
   let type = request.type
-  dealFunctions[type](request.id, request.name)  
+  console.log(request)
+  dealFunctions[type](String(request.id), request.name)  
 }
 function initListener () {
   dom.input.addEventListener('blur', inputBlurListener)
@@ -282,8 +277,8 @@ function initListener () {
 
 function newCache (name) {
   activeItems[activeId].active = false 
-  let _newId = Math.max(...Object.keys(activeItems).map(i => Number(i))) + 1
-  activeId = _newId
+  activeId = Math.max(...Object.keys(activeItems).map(i => Number(i))) + 1
+
   activeItems[activeId] = {
     active: true,
     name: name
@@ -298,8 +293,4 @@ function newCache (name) {
   createMarkdown('')
 }
 
-// 加入后悔药功能
-// 加入防抖功能
-// 加入监听功能，来实现多个tab页
-
-window.addEventListener('load', pageLoadHandler);
+window.addEventListener('load', pageLoadHandler)
