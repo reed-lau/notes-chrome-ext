@@ -38,7 +38,9 @@ const createMarkdown = markdown => {
     },
     toolbarIcons : function() {
       let icons = editormd.toolbarModes['full']
-      icons.push('pdf')
+      if (icons[icons.length - 1] !== 'pdf') {
+        icons.push('pdf')
+      }
 
       return icons
     },
