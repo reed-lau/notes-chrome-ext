@@ -1,25 +1,33 @@
-#nav {
-    line-height:30px;
-    height:300px;
-    width:20%;
-    float:left;
-    padding:5px;	      
-}
 #main {
-    width: 60%;
-    float:left;
-    padding:10px;	 	 
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+#layout {
+  width: 90%;
+}
+#print-js {
+  width: 100% !important;
+  height: fit-content !important;
+  top: 0 !important;
+  padding: 0 40px;
+
+}
+.editormd-fullscreen {
+  z-index: 110;
 }
 #container {
   position: absolute;
+  z-index: 100;
   left: 20px;
   bottom: 20px;
-  width: 200px;
+  width: 160px;
   text-align: center;
   font-size: 16px;
 }
 #selector {
   max-height: 300px;
+  z-index: 10000;
   overflow-y: auto;
   overflow-x: hidden;
   /* border: 1px solid; */
@@ -104,4 +112,11 @@ button:hover {
   transform: translateY(-50%);
   background-color: #F56C6C;
   border-radius: 50%;
+}
+
+.tool-icon {
+  width: 22px;
+}
+.tool-icon:hover {
+  cursor: pointer;
 }

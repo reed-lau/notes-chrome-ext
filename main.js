@@ -28,15 +28,29 @@ const createMarkdown = markdown => {
   document.getElementById('content').value = markdown
   editor = editormd('editor', {
     width: "100%",
-    height: 720,
+    height: 800,
     placeholder : "think before you write...",
     taskList : true,
     tex : true,
     emoji : true,
+    toolbarIconsClass : {
+      testIcon : "fa-gears"  // 指定一个FontAawsome的图标类
+    },
+    toolbarIcons : function() {
+      let icons = editormd.toolbarModes['full']
+      if (icons[icons.length - 1] !== 'pdf') {
+        icons.push('pdf')
+      }
+
+      return icons
+    },
+    toolbarCustomIcons : {
+      pdf: `<image class="tool-icon" src="./images/pdf.svg" id="pdf"/>`
+    },
     onchange : function () {
       let content = document.getElementById('content')
       if (!content) return
-      chrome.storage.sync.set({[activeId]: content.value}, function() {
+      chrome.storage.local.set({[activeId]: content.value}, function() {
         chrome.runtime.sendMessage({
           type: 'update',
           id: activeId
@@ -60,7 +74,7 @@ const createEditorDom = () => {
 }
 
 const recreateMarkdown = id => {
-  chrome.storage.sync.get(id, data => {
+  chrome.storage.local.get(id, data => {
     createMarkdown(data[id])
   })
 }
@@ -68,10 +82,20 @@ const recreateMarkdown = id => {
 function pageLoadHandler() {
     initDom()
     initListener()
-    chrome.storage.sync.get('nodeList', (data) => {
+    const _init = (data) => {
       createList(data.nodeList)
       setInputValue(data.nodeList[activeId] && data.nodeList[activeId].name || '')
       recreateMarkdown(activeId)
+    }
+    chrome.storage.local.get('nodeList', (data) => {
+      if (!data.nodeList) {
+        const _initData = {'nodeList': {}}
+        chrome.storage.local.set(_initData, function() {
+          _init(_initData)
+        })
+      } else {
+        _init(data)
+      }
     })
 }
 
@@ -85,7 +109,7 @@ function selectorListener (e) {
     activeItems[id].active = true
     activeId = id
     setInputValue(activeItems[id].name)
-    chrome.storage.sync.set({'nodeList': activeItems}, nopFunction)
+    chrome.storage.local.set({'nodeList': activeItems}, nopFunction)
     recreateMarkdown(activeId)
   } else if (targetType === 'img') {
     deleteListener(id)
@@ -132,7 +156,7 @@ function createList (arr = {}, isNeedRender = false) {
       active: true,
       name: 'note'
     }
-    chrome.storage.sync.set({'nodeList': activeItems}, nopFunction)
+    chrome.storage.local.set({'nodeList': activeItems}, nopFunction)
   } else {
     activeId = Object.keys(activeItems).find(id => {
       return activeItems[id].active
@@ -146,7 +170,7 @@ function deleteListener (id) {
   if (keys.length === 1) return 
 
   
-  chrome.storage.sync.get('lastCache', function(data) {
+  chrome.storage.local.get('lastCache', function(data) {
     let res = data.lastCache
     let needDelete = undefined
     if (!res || res.length < 1) {
@@ -161,16 +185,16 @@ function deleteListener (id) {
     if (res.length >= cacheMaxSize) {
       needDelete = res.shift()
     }
-    chrome.storage.sync.set({'lastCache': res}, nopFunction)
+    chrome.storage.local.set({'lastCache': res}, nopFunction)
 
     delete activeItems[id]
-    chrome.storage.sync.set({'nodeList': activeItems}, () => {
+    chrome.storage.local.set({'nodeList': activeItems}, () => {
       chrome.runtime.sendMessage({
         type: 'delete',
         id: id
       })
     })
-    needDelete && chrome.storage.sync.remove(String(needDelete.id), nopFunction)
+    needDelete && chrome.storage.local.remove(String(needDelete.id), nopFunction)
 
     if (activeId === id) {
       activeId = Object.keys(activeItems)[0]
@@ -180,13 +204,13 @@ function deleteListener (id) {
 }
 
 function revertListener () {
-  chrome.storage.sync.get('lastCache', function(data) {
+  chrome.storage.local.get('lastCache', function(data) {
     let res = data.lastCache
     if (!res || res.length < 1) {
       return
     }
     let _active = res.pop()
-    chrome.storage.sync.set({'lastCache': res}, nopFunction)
+    chrome.storage.local.set({'lastCache': res}, nopFunction)
 
     activeItems[_active.id] = {
       active: true,
@@ -199,8 +223,8 @@ function revertListener () {
       id: activeId,
       name: _active.name
     })
-    chrome.storage.sync.set({'nodeList': activeItems}, nopFunction)
-    chrome.storage.sync.get(activeId, (data) => {
+    chrome.storage.local.set({'nodeList': activeItems}, nopFunction)
+    chrome.storage.local.get(activeId, (data) => {
       setInputValue(_active.name)
       createMarkdown(data[activeId])
     })
@@ -245,7 +269,7 @@ function inputEnterListener (e) {
       activeItems[id].active = true
       activeId = id
       setInputValue(activeItems[id].name)
-      chrome.storage.sync.set({'nodeList': activeItems}, nopFunction) 
+      chrome.storage.local.set({'nodeList': activeItems}, nopFunction) 
       recreateMarkdown(activeId)
     }
   }
@@ -276,10 +300,25 @@ function chromeRuntimeListener (request) {
     add: _add
   }
   let type = request.type
-  console.log(request)
   dealFunctions[type](String(request.id), request.name)  
 }
+function initPrintListener () {
+  const reload = () => location.reload()
+  if (window.matchMedia) {
+    //返回一个新的 MediaQueryList 对象，表示指定的媒体查询字符串解析后的结果。
+    const mediaQueryList = window.matchMedia('print');
+    mediaQueryList.addListener(function(mql) {
+      if (!mql.matches) {
+        reload();
+      }
+    })
+  }
+
+  window.onafterprint = reload;
+}
+
 function initListener () {
+  initPrintListener()
   dom.input.addEventListener('blur', inputBlurListener)
   dom.input.addEventListener('input', inputInputListener)
   dom.input.addEventListener('keypress', inputEnterListener)
@@ -293,6 +332,12 @@ function initListener () {
   dom.selector.addEventListener('click', selectorListener)
   dom.revert.addEventListener('click', revertListener)
   chrome.runtime.onMessage.addListener(chromeRuntimeListener)
+  setTimeout(() => {
+    const pdf = document.getElementById('pdf')
+    if (pdf) {
+      pdf.addEventListener('click', generatePdf)
+    }
+  }, 2000)
 }
 
 function newCache (name) {
@@ -303,7 +348,7 @@ function newCache (name) {
     active: true,
     name: name
   }
-  chrome.storage.sync.set({'nodeList': activeItems}, () => {
+  chrome.storage.local.set({'nodeList': activeItems}, () => {
     chrome.runtime.sendMessage({
       type: 'add',
       id: activeId,
@@ -311,6 +356,16 @@ function newCache (name) {
     })
   })
   createMarkdown('')
+}
+
+function generatePdf () {
+  const dom = document.getElementsByClassName('editormd-preview')[0]
+  dom.setAttribute('id', 'print-js')
+  document.body.innerHTML = ''
+  document.body.appendChild(dom)
+  setTimeout(() => {
+    print()
+  }, 1000)
 }
 
 window.addEventListener('load', pageLoadHandler)
